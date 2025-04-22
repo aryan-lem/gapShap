@@ -10,6 +10,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -17,6 +18,9 @@ import jakarta.servlet.http.HttpSession;
 import org.springframework.security.core.context.SecurityContextHolder;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.stream.Collectors;
 
 @RestController
 public class UserController {
@@ -126,5 +130,39 @@ public class UserController {
     @GetMapping("/public/hello")
     public String publicEndpoint() {
         return "This is a public endpoint that doesn't require authentication";
+    }
+    @GetMapping("/api/users")
+    public ResponseEntity<?> getAllUsers(@AuthenticationPrincipal OidcUser principal,
+                                        @RequestParam(required = false) String query) {
+        if (principal == null) {
+            return ResponseEntity.status(401).body("Not authenticated");
+        }
+        
+        User currentUser = userService.findUserByAuthId(principal.getSubject())
+            .orElseThrow(() -> new NoSuchElementException("User not found"));
+        
+        List<User> users;
+        if (query != null && !query.isEmpty()) {
+            // Search users by name or email if query is provided
+            users = userService.searchUsers(query);
+        } else {
+            // Return all users if no query
+            users = userService.findAllUsers();
+        }
+        
+        // Filter out the current user from results
+        List<Map<String, Object>> response = users.stream()
+            .filter(user -> !user.getId().equals(currentUser.getId()))
+            .map(user -> {
+                Map<String, Object> userMap = new HashMap<>();
+                userMap.put("id", user.getId());
+                userMap.put("name", user.getName());
+                userMap.put("email", user.getEmail());
+                userMap.put("pictureUrl", user.getPictureUrl());
+                return userMap;
+            })
+            .collect(Collectors.toList());
+        
+        return ResponseEntity.ok(response);
     }
 }

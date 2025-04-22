@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ExternalStorageConfigurationManager" enabled="true" />
+  <component name="MavenProjectsManager">
+    <option name="originalFiles">
+      <list>
+        <option value="$PROJECT_DIR$/pom.xml" />
+      </list>
+    </option>
+  </component>
+  <component name="ProjectRootManager" version="2" languageLevel="JDK_23" default="true" project-jdk-name="23" project-jdk-type="JavaSDK" />
+</project>
+
+<!-- ┌─────────┐     ┌─────────┐     ┌───────┐     ┌────────────┐
+│ Browser │     │ Backend │     │ Auth0 │     │ PostgreSQL │
+└────┬────┘     └────┬────┘     └───┬───┘     └─────┬──────┘
+     │ Click Login    │             │               │
+     │ ───────────────┼─────────────┼───────────────┼──────>
+     │                │             │               │
+     │ Redirect to /oauth2/authorization/auth0      │
+     │ ───────────────┼─────────>   │               │
+     │                │             │               │
+     │                │ Redirect to Auth0 login page│
+     │ <──────────────┼─────────────┼───────────────┼──────
+     │                │             │               │
+     │ User authenticates with Auth0│               │
+     │ ───────────────┼─────────────┼───────>       │
+     │                │             │               │
+     │                │ Redirect to callback URL    │
+     │ <──────────────┼─────────────┼───────────────┼──────
+     │                │             │               │
+     │ Redirect to callback         │               │
+     │ ───────────────┼─────────>   │               │
+     │                │             │               │
+     │                │ Create session              │
+     │                │ ───────────────────────────>│
+     │                │                             │
+     │ Redirect to frontend/auth-success            │
+     │ <──────────────┼─────────────┼───────────────┼──────
+     │                │             │               │
+     │ Fetch user data from /api/user               │
+     │ ───────────────┼─────────>   │               │
+     │                │             │               │
+     │                │ Update user in database     │
+     │                │ ───────────────────────────>│
+     │                │                             │
+     │ Return user data                             │
+     │ <──────────────┼─────────────┼───────────────┼──────
+     │                │             │               │ -->
+
+

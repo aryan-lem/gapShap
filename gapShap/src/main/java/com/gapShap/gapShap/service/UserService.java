@@ -4,8 +4,9 @@ import com.gapShap.gapShap.model.User;
 import com.gapShap.gapShap.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class UserService {
@@ -34,5 +35,24 @@ public class UserService {
 
     public Optional<User> findUserByAuthId(String authId) {
         return userRepository.findByAuthId(authId);
+    }
+    public Optional<User> findUserById(Long id) {
+        return userRepository.findById(id);
+    }
+    public List<User> findUsersByIds(List<Long> ids) {
+        return ids.stream()
+                .map(userRepository::findById)
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .collect(Collectors.toList());
+    }
+    
+    public List<User> findAllUsers() {
+        return userRepository.findAll();
+    }
+    
+    // Search users by name or email
+    public List<User> searchUsers(String query) {
+        return userRepository.findByNameContainingIgnoreCaseOrEmailContainingIgnoreCase(query, query);
     }
 }
