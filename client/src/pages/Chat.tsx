@@ -10,6 +10,8 @@ const Chat: React.FC = () => {
   const { loading, error } = useChat();
   const [showNewConversationModal, setShowNewConversationModal] = useState(false);
   
+  if(user!=null)console.log(user);
+  
   if (loading) {
     return <div>Loading chats...</div>;
   }

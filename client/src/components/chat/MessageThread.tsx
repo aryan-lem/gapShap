@@ -1,16 +1,20 @@
-import React, { useEffect, useRef, useMemo } from 'react';
+import React, { useEffect, useRef, useMemo, useState } from 'react';
 import { useChat } from '../../context/ChatContext';
 import { useAuth } from '../../context/AuthContext';
 import MessageInput from './MessageInput.tsx';
 import './MessageThread.css';
 
 const MessageThread: React.FC = () => {
-  const { activeConversation, messages } = useChat();
+  const { activeConversation, messages, loadMoreMessages, loadingMoreMessages, hasMoreMessages } = useChat();
   const { user } = useAuth();
   const messageEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const [prevMessageCount, setPrevMessageCount] = useState(0);
+  
+  // Track message height before loading more to maintain scroll position
+  const [prevScrollHeight, setPrevScrollHeight] = useState(0);
 
   const sortedMessages = useMemo(() => {
-    // Add this console.log to see the actual timestamps
     console.log('Timestamps before sorting:', messages.map(m => ({id: m.id, content: m.content.substring(0, 10), sentAt: m.sentAt})));
   
     const sorted = [...messages].sort((a, b) => {
@@ -18,17 +22,47 @@ const MessageThread: React.FC = () => {
       return a.sentAt - b.sentAt;
     });
     
-    // Log the sorted result to verify
     console.log('Sorted order:', sorted.map(m => ({id: m.id, content: m.content.substring(0, 10), sentAt: m.sentAt})));
-    
     return sorted;
   }, [messages]);
 
-  // Auto-scroll to bottom when new messages arrive
+  // Save previous scroll position before loading more messages
   useEffect(() => {
-    console.log('Messages updated in msg thread:', messages);
-    messageEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (messages.length > prevMessageCount && prevMessageCount > 0 && messagesContainerRef.current) {
+      // If we loaded more messages (not new ones)
+      const container = messagesContainerRef.current;
+      const newScrollHeight = container.scrollHeight;
+      
+      // Restore scroll position to keep it at the same relative point
+      if (prevScrollHeight > 0) {
+        const scrollDiff = newScrollHeight - prevScrollHeight;
+        container.scrollTop = container.scrollTop + scrollDiff;
+      }
+    }
+    
+    setPrevMessageCount(messages.length);
+  }, [messages, prevMessageCount]);
+
+  // Auto-scroll to bottom when new messages arrive but not when loading older ones
+  useEffect(() => {
+    // Only auto-scroll if we're already near the bottom
+    if (messagesContainerRef.current) {
+      const container = messagesContainerRef.current;
+      const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+      
+      if (isNearBottom) {
+        messageEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  }, [sortedMessages]);
+
+  // Handle loading more messages
+  const handleLoadMore = async () => {
+    if (messagesContainerRef.current) {
+      setPrevScrollHeight(messagesContainerRef.current.scrollHeight);
+    }
+    await loadMoreMessages();
+  };
 
   if (!activeConversation) {
     return (
@@ -37,6 +71,7 @@ const MessageThread: React.FC = () => {
       </div>
     );
   }
+  
   const formatTime = (timestamp: number) => {
     if (!timestamp) return "Unknown time";
     
@@ -44,8 +79,7 @@ const MessageThread: React.FC = () => {
         hour: '2-digit', 
         minute: '2-digit' 
     });
-};
-
+  };
 
   return (
     <div className="message-thread">
@@ -62,7 +96,19 @@ const MessageThread: React.FC = () => {
         </div>
       </div>
 
-      <div className="messages-container">
+      <div className="messages-container" ref={messagesContainerRef}>
+        {hasMoreMessages && (
+          <div className="load-more-container">
+            <button 
+              className="load-more-button" 
+              onClick={handleLoadMore}
+              disabled={loadingMoreMessages}
+            >
+              {loadingMoreMessages ? 'Loading...' : 'Load older messages'}
+            </button>
+          </div>
+        )}
+        
         {sortedMessages.length === 0 ? (
           <div className="no-messages">No messages yet. Start the conversation!</div>
         ) : (

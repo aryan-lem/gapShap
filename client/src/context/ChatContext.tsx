@@ -9,7 +9,7 @@ export interface Message {
     senderId: number;
     senderName: string;
     content: string;
-    sentAt:number;
+    sentAt: number;
     timestamp: string;
     read: boolean;
     conversationId?: number; // Added to match backend model
@@ -36,6 +36,9 @@ interface ChatContextType {
     selectConversation: (conversationId: number) => void;
     sendMessage: (content: string) => void;
     markAsRead: (conversationId: number) => void;
+    loadMoreMessages: () => Promise<boolean>;
+    loadingMoreMessages: boolean;
+    hasMoreMessages: boolean;
 }
 
 const ChatContext = createContext<ChatContextType>({
@@ -50,6 +53,9 @@ const ChatContext = createContext<ChatContextType>({
     selectConversation: () => { },
     sendMessage: () => { },
     markAsRead: () => { },
+    loadMoreMessages: async () => false,
+    loadingMoreMessages: false,
+    hasMoreMessages: false,
 });
 
 export const useChat = () => useContext(ChatContext);
@@ -65,6 +71,10 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [loading, setLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
     const [connected, setConnected] = useState<boolean>(false); // Added connection status state
+    const [currentPage, setCurrentPage] = useState<number>(0);
+    const [hasMoreMessages, setHasMoreMessages] = useState<boolean>(true);
+    const [loadingMoreMessages, setLoadingMoreMessages] = useState<boolean>(false);
+    const PAGE_SIZE = 20;
 
     // Helper function to fetch a single conversation
     const fetchConversation = async (conversationId: number) => {
@@ -87,12 +97,14 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         client.onConnect = () => {
             console.log('Connected to WebSocket');
             setConnected(true);
-            
+
             // Subscribe to personal queue for new messages
             client.subscribe('/user/queue/messages', (message) => {
                 console.log('RAW MESSAGE RECEIVED:', message);
                 console.log('MESSAGE HEADERS:', message.headers);
+                const receivedMessage = JSON.parse(message.body);
                 console.log('MESSAGE BODY:', message.body);
+                console.log('PARSED MESSAGE:', receivedMessage);
                 try {
                     console.log('Received WebSocket message:', message.body);
                     const receivedMessage = JSON.parse(message.body);
@@ -101,7 +113,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     console.error('Error processing message:', error);
                 }
             });
-            
+
             // Subscribe to read receipts
             client.subscribe('/user/queue/receipts', (receipt) => {
                 try {
@@ -111,7 +123,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     console.error('Error processing read receipt:', error);
                 }
             });
-          
+
             // Subscribe to global updates (new conversations)
             client.subscribe('/topic/conversations', (data) => {
                 try {
@@ -133,9 +145,17 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setError('Failed to connect to chat service');
             setConnected(false);
         };
-        
+
         return client;
     };
+    useEffect(() => {
+        if (activeConversation) {
+            console.log(`Conversation ACTIVATED: ID=${activeConversation.id}, Name=${activeConversation.name}`);
+            console.log('Active conversation details:', activeConversation);
+        } else {
+            console.log('Conversation DEACTIVATED: No active conversation');
+        }
+    }, [activeConversation]);
 
     // Initialize WebSocket connection
     useEffect(() => {
@@ -156,7 +176,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         // Setup the client with all subscriptions
         setupClient(client);
-        
+
         client.activate();
         setStompClient(client);
 
@@ -180,12 +200,44 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             // Setup the reconnect client with all the same subscriptions
             setupClient(reconnectClient);
-            
+
             reconnectClient.activate();
             setStompClient(reconnectClient);
         }
     }, [isAuthenticated, user, connected, stompClient?.active]);
-    
+    // Add this useEffect to handle initial conversation selection if not already selected
+    useEffect(() => {
+        // Restore active conversation from session storage when conversations load
+        const savedConversationId = sessionStorage.getItem('activeConversationId');
+
+        if (savedConversationId && conversations.length > 0) {
+            const conversationId = parseInt(savedConversationId);
+            const savedConversation = conversations.find(c => c.id === conversationId);
+
+            if (savedConversation && !activeConversation) {
+                console.log(`Restoring active conversation from session: ${conversationId}`);
+                selectConversation(conversationId);
+            }
+        }
+    }, [conversations, activeConversation]);
+
+    // Near the top of your ChatProvider component, add this effect
+    useEffect(() => {
+        // Auto-select the first conversation if none is selected
+        if (conversations.length > 0 && !activeConversation) {
+            // Find the conversation with the most recent message
+            const mostRecentConversation = [...conversations].sort((a, b) => {
+                const timeA = a.lastMessage?.sentAt || 0;
+                const timeB = b.lastMessage?.sentAt || 0;
+                return timeB - timeA; // Sort in descending order (newest first)
+            })[0];
+
+            if (mostRecentConversation) {
+                console.log('Auto-selecting conversation:', mostRecentConversation.id);
+                selectConversation(mostRecentConversation.id);
+            }
+        }
+    }, [conversations, activeConversation]);
     // Load conversations
     useEffect(() => {
         if (isAuthenticated) {
@@ -213,38 +265,97 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
 
-    const selectConversation = async (conversationId: number) => {
-        try {
-            setLoading(true);
+    // Modify selectConversation to reset pagination
+  const selectConversation = async (conversationId: number) => {
+    try {
+      console.log(`Attempting to select conversation: ${conversationId}`);
+      setLoading(true);
 
-            // Find the selected conversation
-            const conversation = conversations.find(c => c.id === conversationId);
-            if (!conversation) {
-                throw new Error('Conversation not found');
-            }
+      // Find the selected conversation
+      const conversation = conversations.find(c => c.id === conversationId);
+      if (!conversation) {
+        console.error(`Conversation not found: ${conversationId}`);
+        throw new Error('Conversation not found');
+      }
 
-            setActiveConversation(conversation);
+      console.log(`Setting active conversation: ${conversationId}`, conversation);
+      setActiveConversation(conversation);
+      
+      // Reset pagination state
+      setCurrentPage(0);
+      setHasMoreMessages(true);
+      
+      // Save the active conversation ID to sessionStorage
+      saveActiveConversationId(conversationId);
 
-            // Load messages for this conversation
-            const response = await fetch(`${API_URL}/api/conversations/${conversationId}/messages`, {
-                credentials: 'include',
-            });
+      // Load initial messages for this conversation
+      const response = await fetch(`${API_URL}/api/conversations/${conversationId}/messages?page=0&size=${PAGE_SIZE}`, {
+        credentials: 'include',
+      });
 
-            if (!response.ok) {
-                throw new Error('Failed to load messages');
-            }
+      if (!response.ok) {
+        throw new Error('Failed to load messages');
+      }
 
-            const data = await response.json();
-            setMessages(data);
+      const data = await response.json();
+      console.log(`Received ${data.length} messages for conversation ${conversationId}`);
+      setMessages(data);
+      setHasMoreMessages(data.length === PAGE_SIZE); // If we got a full page, there might be more
 
-            // Mark messages as read
-            markAsRead(conversationId);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'An error occurred');
-        } finally {
-            setLoading(false);
-        }
-    };
+      // Mark messages as read
+      markAsRead(conversationId);
+    } catch (err) {
+      console.error('Error selecting conversation:', err);
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+// Add function to load more (older) messages
+const loadMoreMessages = async (): Promise<boolean> => {
+    if (!activeConversation || loadingMoreMessages || !hasMoreMessages) {
+      return false;
+    }
+    
+    try {
+      setLoadingMoreMessages(true);
+      const nextPage = currentPage + 1;
+      
+      console.log(`Loading more messages for conversation ${activeConversation.id}, page ${nextPage}`);
+      const response = await fetch(
+        `${API_URL}/api/conversations/${activeConversation.id}/messages?page=${nextPage}&size=${PAGE_SIZE}`,
+        { credentials: 'include' }
+      );
+      
+      if (!response.ok) {
+        throw new Error('Failed to load more messages');
+      }
+      
+      const olderMessages = await response.json();
+      console.log(`Received ${olderMessages.length} older messages`);
+      
+      if (olderMessages.length < PAGE_SIZE) {
+        setHasMoreMessages(false);
+      }
+      
+      if (olderMessages.length > 0) {
+        // Prepend older messages to the existing messages
+        setMessages(prev => [...olderMessages, ...prev]);
+        setCurrentPage(nextPage);
+        return true;
+      } else {
+        setHasMoreMessages(false);
+        return false;
+      }
+      
+    } catch (err) {
+      console.error('Error loading more messages:', err);
+      setError(err instanceof Error ? err.message : 'An error occurred');
+      return false;
+    } finally {
+      setLoadingMoreMessages(false);
+    }
+  };
 
     const createDirectConversation = async (userId: number) => {
         try {
@@ -376,57 +487,87 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Replace your existing handleIncomingMessage function with this improved version:
 
-const handleIncomingMessage = (message: Message) => {
-    console.log('Received message:', message);
-    console.log('Active conversation check:', {
-        activeConvId: activeConversation?.id,
-        messageConvId: message.conversationId,
-        equal: activeConversation?.id === message.conversationId
-    });
-    
-    if (!message.conversationId) {
-        console.error('Message missing conversationId:', message);
-        return;
-    }
+    // Replace your existing handleIncomingMessage function with this:
+    // Save active conversation ID to session storage so it persists
+    const saveActiveConversationId = (id: number | null) => {
+        if (id) {
+            sessionStorage.setItem('activeConversationId', id.toString());
+        } else {
+            sessionStorage.removeItem('activeConversationId');
+        }
+    };
+    // Update the handleIncomingMessage function to fix the notification logic
 
-    // CRITICAL FIX: Update the messages array FIRST before modifying the conversations list
-    // This ensures immediate UI update in the chat thread
-    if (activeConversation && message.conversationId === activeConversation.id) {
-        console.log('Adding message to active conversation');
-        
-        // Update active conversation messages immediately
-        setMessages(prev => {
-            const isDuplicate = prev.some(m => m.id === message.id);
-            if (isDuplicate) {
+    const handleIncomingMessage = (message: Message) => {
+        console.log('Received message:', message);
+
+        // Store message conversationId for clarity
+        const messageConvId = message.conversationId;
+        const savedConversationId = sessionStorage.getItem('activeConversationId');
+
+        // Debug active conversation state  
+        console.log('Active conversation check:', {
+            activeConvId: activeConversation?.id,
+            savedConvId: savedConversationId,
+            messageConvId: messageConvId,
+            equal: activeConversation?.id === messageConvId || savedConversationId === String(messageConvId),
+        });
+
+        // Check both current state and saved ID for more resilience
+        const isActiveConversation =
+            (activeConversation && messageConvId === activeConversation.id) ||
+            (savedConversationId && parseInt(savedConversationId) === messageConvId);
+
+        if (isActiveConversation) {
+            console.log('Adding message to active conversation:', messageConvId);
+
+            // If we have a message for active conversation but activeConversation state is null,
+            // try to restore it from the saved ID
+            if (!activeConversation && savedConversationId && conversations.length > 0) {
+                const conversationId = parseInt(savedConversationId);
+                const conversation = conversations.find(c => c.id === conversationId);
+                if (conversation) {
+                    console.log('Restoring active conversation for message:', conversationId);
+                    setActiveConversation(conversation);
+                }
+            }
+
+            // Update messages immediately
+            setMessages(prev => {
+                const isDuplicate = prev.some(m => m.id === message.id);
+                if (isDuplicate) return prev;
+                return [...prev, message];
+            });
+
+            // Mark as read since we're looking at this conversation
+            markAsRead(messageConvId);
+        } else {
+            console.log('Message not for active conversation:', messageConvId);
+        }
+
+        // THEN update the conversations list
+        setConversations(prev => {
+            const existingConversation = prev.find(c => c.id === messageConvId);
+
+            if (existingConversation) {
+                return prev.map(conv =>
+                    conv.id === messageConvId
+                        ? {
+                            ...conv,
+                            lastMessage: message,
+                            // KEY CHANGE: Don't increment unread count if conversation is active
+                            unreadCount: isActiveConversation ? 0 : conv.unreadCount + 1
+                        }
+                        : conv
+                );
+            } else {
+                if (messageConvId) {
+                    fetchConversation(messageConvId);
+                }
                 return prev;
             }
-            return [...prev, message];
         });
-        
-        // Mark as read since we're already viewing this conversation
-        markAsRead(message.conversationId);
-    }
-    
-    // THEN update the conversations list
-    setConversations(prev => {
-        const existingConversation = prev.find(c => c.id === message.conversationId);
-        
-        if (existingConversation) {
-            return prev.map(conv => 
-                conv.id === message.conversationId 
-                ? {
-                    ...conv,
-                    lastMessage: message,
-                    unreadCount: activeConversation?.id === message.conversationId ? 0 : conv.unreadCount + 1
-                } 
-                : conv
-            );
-        } else {
-            fetchConversation(message.conversationId||0);
-            return prev;
-        }
-    });
-};
+    };
     const handleReadReceipt = (receipt: { conversationId: number, userId: number }) => {
         // Update message read status if needed
         if (activeConversation?.id === receipt.conversationId) {
@@ -452,6 +593,9 @@ const handleIncomingMessage = (message: Message) => {
                 selectConversation,
                 sendMessage,
                 markAsRead,
+                loadMoreMessages,      // Add this
+                loadingMoreMessages,   // Add this
+                hasMoreMessages,       // Add this
             }}
         >
             {children}
