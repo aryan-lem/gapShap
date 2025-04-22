@@ -1,0 +1,49 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/gapshap
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  security:
+    oauth2:
+      client:
+        registration:
+          auth0:
+            client-id: STcoA62Iv2l7D7Nz54xQ9hfoIrTBvTJD
+            client-secret: pMmjiFHPSJ8H1PrBN2hzsTmsNxN1nOdDcrZeo6M9rxdSVL5EOrtnZGPwSV-Y5YRZ
+            authorization-grant-type: authorization_code
+            redirect-uri: "http://localhost:8080/login/oauth2/code/auth0"
+            scope: openid,profile,email
+            provider: auth0
+        provider:
+          auth0:
+            issuer-uri: https://dev-4pm565a3cspyz0h6.us.auth0.com/
+  # Add these new configurations
+  web:
+    cors:
+      allowed-origins: http://localhost:3000
+      allowed-methods: GET,POST,PUT,DELETE,OPTIONS
+      allowed-headers: Authorization,Content-Type,X-Requested-With
+      allow-credentials: true
+      
+server:
+  servlet:
+    session:
+      cookie:
+        same-site: none
+        secure: true
+        http-only: false  # For development only, enable in production
+  port: 8080
+
+# Additional Auth0 configuration
+auth0:
+  audience: ${spring.security.oauth2.client.provider.auth0.issuer-uri}api/v2/
+  logout-url: https://dev-4pm565a3cspyz0h6.us.auth0.com/v2/logout?client_id=${spring.security.oauth2.client.registration.auth0.client-id}&returnTo=http://localhost:3000
