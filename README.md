@@ -1,3 +1,13 @@
+# GapShap Chat Application
+
+GapShap is a real-time chat application with OAuth2 authentication, WebSocket messaging, and conversation management.
+
+
+## System Architecture
+
+The following diagram shows the high-level architecture of the GapShap application:
+
+
 ```mermaid
 graph TB
     %% Client-Side Components
@@ -40,6 +50,9 @@ graph TB
     JPA <--> DB
     WebSocketConfig <--> ChatService
 ```
+## Authentication Flow
+
+This diagram illustrates the login and logout processes using OAuth2 with Auth0:
 
 ```mermaid
 sequenceDiagram
@@ -73,6 +86,9 @@ sequenceDiagram
     Auth0->>React: Redirect to frontend home
     React->>User: Show unauthenticated UI
 ```
+## Messaging Flow
+
+This diagram shows how messages flow between users in real-time:
 
 ```mermaid
 sequenceDiagram
