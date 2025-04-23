@@ -1,18 +1,20 @@
 .message-input {
-  display: flex;
-  padding: 15px;
-  background-color: white;
-  border-top: 1px solid #e1e4e8;
+    display: flex;
+    padding: 15px;
+    background-color: white;
+    border-top: 1px solid #e1e4e8;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .message-input input {
-  flex: 1;
-  padding: 10px 15px;
-  border: 1px solid #e1e4e8;
-  border-radius: 24px;
-  font-size: 15px;
-  outline: none;
-  transition: border-color 0.2s;
+    flex: 1;
+    padding: 10px 15px;
+    border: 1px solid #e1e4e8;
+    border-radius: 24px;
+    font-size: 15px;
+    outline: none;
+    transition: border-color 0.2s;
 }
 
 .message-input input:focus {

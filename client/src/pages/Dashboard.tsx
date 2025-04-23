@@ -11,7 +11,7 @@ const Dashboard: React.FC = () => {
     <div className="dashboard-container">
       <div className="dashboard-header">
         <h1>Dashboard</h1>
-        <p>Welcome back, {user.name}!</p>
+        <p>Welcome, {user.name}!</p>
       </div>
       
       <div className="user-profile">
@@ -28,21 +28,10 @@ const Dashboard: React.FC = () => {
           <div className="profile-info">
             <h2>{user.name}</h2>
             <p>{user.email}</p>
-            <p>User ID: {user.userId}</p>
           </div>
         </div>
         
-        <div className="dashboard-content">
-          <div className="dashboard-card">
-            <h3>Your Activity</h3>
-            <p>No recent activity to display.</p>
-          </div>
-          
-          <div className="dashboard-card">
-            <h3>Recent Conversations</h3>
-            <p>No recent conversations to display.</p>
-          </div>
-        </div>
+        
       </div>
     </div>
   );

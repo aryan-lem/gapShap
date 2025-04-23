@@ -1,8 +1,11 @@
 .message-thread {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    max-width: 1600px; /* Add a max-width for extremely wide screens */
+    margin: 0 auto; /* Center the content on ultra-wide screens */
+    width: 100%;
 }
 
 .thread-header {
@@ -24,11 +27,12 @@
 }
 
 .messages-container {
-  flex: 1;
-  overflow-y: auto;
-  padding: 15px;
-  display: flex;
-  flex-direction: column;
+    flex: 1;
+    overflow-y: auto;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
 }
 
 .message {
