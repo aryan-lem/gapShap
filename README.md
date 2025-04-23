@@ -39,6 +39,7 @@ graph TB
     ChatService <--> JPA
     JPA <--> DB
     WebSocketConfig <--> ChatService
+```
 
 ```mermaid
 sequenceDiagram
